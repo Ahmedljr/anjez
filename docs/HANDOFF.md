@@ -66,6 +66,16 @@ Two **distinct** child primitives per task (one level each, never nested):
 - **Trade-off:** both primitives share the tasks store, so a change re-renders
   store consumers (task list). Negligible at current scale; splittable later.
 
+### Store-shape fix — new tasks register empty child arrays
+Optimistically-created tasks were never given a key in the `subtasks` /
+`checklist` maps (only tasks that *have* children get one from `groupByTask`),
+so a fresh task's store shape differed from a hydrated one. The UI already
+survived this via read-time `?? []`, but `TasksProvider.addTask` now explicitly
+sets `subtasks[id] = []` and `checklist[id] = []` on create — making new tasks
+identical to hydrated tasks and removing reliance on undefined-array guards.
+**Invariant for future per-task relational state:** initialize it in the
+optimistic create path **and** read it through a `?? []`/selector.
+
 ## 2b. Subtasks architecture (Sprint 2.8)
 
 - **One level only** (a task has many subtasks; never nested).

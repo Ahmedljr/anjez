@@ -111,6 +111,16 @@ export function TasksProvider({
       try {
         const task = await createTask(supabase, userId, input);
         setTasks((current) => [task, ...current]);
+        // Register the new task in the relational maps with empty arrays, so its
+        // store shape is identical to a hydrated task (a task that has children
+        // gets a key from groupByTask) — instead of relying solely on read-time
+        // `?? []`. This keeps checklist/subtasks/progress consistent everywhere.
+        setSubtasks((current) =>
+          current[task.id] ? current : { ...current, [task.id]: [] }
+        );
+        setChecklist((current) =>
+          current[task.id] ? current : { ...current, [task.id]: [] }
+        );
         return task;
       } catch {
         setError("تعذّر إضافة المهمة");
