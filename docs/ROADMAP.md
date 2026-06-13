@@ -9,8 +9,8 @@
 
 ## Status at a glance
 
-- **Current phase:** Sprint 2.5 (performance — auth + bundle) complete; build +
-  lint green.
+- **Current phase:** Sprint 2.6 (client-first data architecture) complete; build
+  + lint green.
 - **Operational blocker:** none — DB migrations `0002` + `0003` are applied.
 - **Next up:** **Subtasks MVP** (one level) — proposal below in "Future Roadmap".
 
@@ -86,6 +86,24 @@
   (dashboard), 195→187 kB (tasks)**.
 - Functionality unchanged; build + lint green. *(Not done — JWT/`getClaims`
   migration, deliberately out of scope.)*
+
+### Sprint 2.6 — Client-First Data Architecture ✅
+- Root cause of "still slow in prod": every navigation re-fetched tasks
+  server-side (dynamic routes can't prefetch their data), so each route waited
+  on middleware auth + a Supabase round-trip + render (~1 s, every time).
+- **Shift to a shared client store (`TasksProvider`, React Context):** the
+  dashboard layout fetches tasks **once**; dashboard + tasks render from the
+  store (client) with no per-navigation fetch. Mutations are optimistic and
+  update the store directly (**no `router.refresh()`**), reflecting across views
+  instantly.
+- **`experimental.staleTimes`** keeps visited route shells in the Router Cache.
+- **Measured (production):** first visit to a route ~426 ms (data-free shell, no
+  data flash); **revisits ~12–39 ms with no skeleton** (was ~1000 ms *every*
+  navigation). Cross-view propagation verified (add on `/tasks` → dashboard total
+  9→10 with no refetch).
+- Auth preserved (middleware `getUser` + headers + RLS). Chose Context over
+  TanStack Query / SWR / Zustand: zero new deps, reuses the existing
+  service + optimistic pattern, single resource. Build + lint green.
 
 ---
 

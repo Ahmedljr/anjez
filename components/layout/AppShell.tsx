@@ -4,21 +4,25 @@ import { useState, type ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/features/auth/components/SignOutButton";
+import { TasksProvider } from "@/features/tasks/components/TasksProvider";
 import { TaskQuickAddProvider } from "@/features/tasks/components/TaskQuickAddProvider";
 import { TaskInteractionProvider } from "@/features/tasks/components/TaskInteractionProvider";
 import { FloatingActionButton } from "@/features/tasks/components/FloatingActionButton";
 import { SidebarNav } from "./SidebarNav";
+import type { Task } from "@/types/task";
 
 interface AppShellProps {
   userId: string;
+  initialTasks: Task[];
   children: ReactNode;
 }
 
-export function AppShell({ userId, children }: AppShellProps) {
+export function AppShell({ userId, initialTasks, children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <TaskQuickAddProvider userId={userId}>
+    <TasksProvider userId={userId} initialTasks={initialTasks}>
+      <TaskQuickAddProvider>
       <TaskInteractionProvider>
       <div className="min-h-dvh bg-slate-50">
         {/* Desktop sidebar — fixed on the right (RTL) */}
@@ -85,6 +89,7 @@ export function AppShell({ userId, children }: AppShellProps) {
         <FloatingActionButton />
       </div>
       </TaskInteractionProvider>
-    </TaskQuickAddProvider>
+      </TaskQuickAddProvider>
+    </TasksProvider>
   );
 }

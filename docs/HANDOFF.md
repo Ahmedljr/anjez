@@ -4,14 +4,17 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-10 · After Sprint 2.5 (Performance — Auth + Bundle)
+> Last handoff: 2026-06-10 · After Sprint 2.6 (Client-First Data Architecture)
 
 ---
 
 ## 1. Where things stand
 
-- **Code:** Sprints 1 → 2.5 implemented. `npm run build` and `npm run lint` both
+- **Code:** Sprints 1 → 2.6 implemented. `npm run build` and `npm run lint` both
   pass cleanly from `anjez-app/`.
+- **Architecture note (2.6):** dashboard + tasks are now **client-first** — task
+  data lives in a shared `TasksProvider` store seeded once by the dashboard
+  layout; navigation between the two does not re-fetch. See §3c.
 - **Local run:** `npm run dev` (the project has been run on port 3001 locally
   because another app occupied 3000).
 - **Live data layer:** Supabase connected (URL + anon key in `.env.local`).
@@ -69,15 +72,49 @@ server floor** — plus dev-mode client render (~400–500 ms; far less in prod)
 region**; it is independent of dataset size (7 rows). Sections, rendering,
 hydration, and RSC payload are all negligible.
 
-**Recommended fixes (not implemented):**
-1. **Reduce round-trip latency** — host the Supabase project in a region close to
-   users (biggest lever; ~250 ms → ~50–80 ms per round-trip), and/or add
-   short-TTL server caching for task reads.
+**Recommended fixes (status):**
+1. ✅ **Addressed in 2.6 (client-first store):** the per-navigation task
+   round-trip is gone — tasks are fetched once and shared client-side.
 2. **Collapse to one auth round-trip** — `getClaims()` + asymmetric JWT keys makes
-   the middleware validation local (removes the ~290 ms auth call). *(Out of the
-   previous sprint's scope; revisit deliberately.)*
-3. **Use production mode for any perceived-speed judgement** — dev adds the
+   the middleware validation local (removes the ~290 ms auth call on the *first*
+   visit to each route). Still out of scope; revisit deliberately.
+3. **Use production mode for any perceived-speed judgement** — dev adds
    client-render overhead and on-demand compile (7 s first dashboard visit).
+
+## 3c. Client-first data architecture (Sprint 2.6)
+
+**Why:** dashboard/tasks are dynamic (cookie/header auth), so Next can't prefetch
+their data — every navigation waited on middleware auth + a Supabase `fetchTasks`
+round-trip + render (~1 s, *every* time), even in production.
+
+**What changed:**
+- **`TasksProvider`** (`features/tasks/components/TasksProvider.tsx`) — shared
+  client store (React Context), seeded **once** by `(dashboard)/layout.tsx`
+  (which `fetchTasks` a single time; the layout persists across child
+  navigation). `useTasksStore()` exposes tasks + optimistic mutations.
+- **Pages read the store**, not the server: `DashboardView` + `TaskList` are
+  client components; the page server components fetch **no** task data.
+- Mutations are optimistic via the store — **`router.refresh()` removed**, so no
+  full server re-render and changes reflect across views instantly.
+- **`experimental.staleTimes`** (`next.config.ts`, dynamic 180 / static 300)
+  keeps visited route shells in the client Router Cache.
+- Auth unchanged (middleware `getUser` + identity headers + RLS).
+
+**Measured (production):**
+| Navigation | Before (2.5) | After (2.6) |
+|---|---|---|
+| dashboard ↔ tasks, first visit | ~1000 ms + data skeleton | ~426 ms shell, no data flash |
+| dashboard ↔ tasks, **revisit** | ~1000 ms *(every time)* | **12–39 ms, no skeleton** |
+Cross-view propagation verified: adding a task on `/tasks` updated the dashboard
+total 9→10 with no refetch.
+
+**Trade-offs / watch-items:**
+- The dashboard sections are now client components (route First Load JS
+  185→188 kB) — acceptable for an authenticated app.
+- The store is seeded at layout load; it does not yet auto-revalidate on window
+  focus/visibility (a `refresh()` exists for that — a small future add).
+- A throwaway test task ("مهمة اختبار المخزن المشترك") was created during
+  verification and persists in the DB; delete it if undesired.
 
 ## 4. Verification checklist (tasks feature)
 

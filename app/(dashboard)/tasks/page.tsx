@@ -1,7 +1,3 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/supabase/current-user";
-import { fetchTasks } from "@/services/task.service";
 import { TaskList, type TaskListFilter } from "@/features/tasks";
 
 export default async function TasksPage({
@@ -9,16 +5,9 @@ export default async function TasksPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const supabase = await createClient();
-  // Run auth, the task query and the search params concurrently.
-  const [user, tasks, { filter }] = await Promise.all([
-    getCurrentUser(),
-    fetchTasks(supabase),
-    searchParams,
-  ]);
-
-  if (!user) redirect("/login");
-
+  // Auth is enforced by middleware + the dashboard layout. Task data comes from
+  // the shared client store (TasksProvider) — no per-navigation fetch here.
+  const { filter } = await searchParams;
   const activeFilter: TaskListFilter =
     filter === "completed" || filter === "overdue" ? filter : "active";
 
@@ -35,7 +24,7 @@ export default async function TasksPage({
         <p className="mt-1 text-sm text-slate-500">{headings[activeFilter]}</p>
       </div>
 
-      <TaskList userId={user.id} initialTasks={tasks} filter={activeFilter} />
+      <TaskList filter={activeFilter} />
     </div>
   );
 }

@@ -4,16 +4,10 @@ import {
   createContext,
   useCallback,
   useContext,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import {
-  deleteTask,
-  updateTask,
-} from "@/services/task.service";
+import { useTasksStore } from "./TasksProvider";
 import { TaskDetailsModal } from "./TaskDetailsModal";
 import { TaskFormModal } from "./TaskFormModal";
 import type { Task, TaskStatus, TaskUpdateInput } from "@/types/task";
@@ -39,34 +33,32 @@ export function useTaskInteraction(): TaskInteractionContextValue {
 /**
  * Owns the app-wide task details + edit experience. Any clickable task (dashboard
  * cards, task list rows) opens the same details modal. Mutations go through the
- * task service and a router refresh keeps server components in sync.
+ * shared tasks store — optimistic, and reflected everywhere without a server
+ * round-trip.
  */
 export function TaskInteractionProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
+  const { editTask, removeTask, setStatus } = useTasksStore();
   const [detailsTask, setDetailsTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const openDetails = useCallback((task: Task) => setDetailsTask(task), []);
 
   const handleChangeStatus = useCallback(
-    async (taskId: string, status: TaskStatus) => {
-      // Optimistically reflect the new status in the open modal.
+    (taskId: string, status: TaskStatus) => {
+      // Keep the open modal in sync with the optimistic change.
       setDetailsTask((t) => (t && t.id === taskId ? { ...t, status } : t));
-      await updateTask(supabase, taskId, { status });
-      router.refresh();
+      void setStatus(taskId, status);
     },
-    [supabase, router]
+    [setStatus]
   );
 
   const handleDelete = useCallback(
-    async (taskId: string) => {
+    (taskId: string) => {
       if (!window.confirm("هل تريد حذف هذه المهمة؟")) return;
       setDetailsTask(null);
-      await deleteTask(supabase, taskId);
-      router.refresh();
+      void removeTask(taskId);
     },
-    [supabase, router]
+    [removeTask]
   );
 
   const handleEdit = useCallback((task: Task) => {
@@ -76,10 +68,9 @@ export function TaskInteractionProvider({ children }: { children: ReactNode }) {
 
   const handleUpdate = useCallback(
     async (taskId: string, input: TaskUpdateInput) => {
-      await updateTask(supabase, taskId, input);
-      router.refresh();
+      await editTask(taskId, input);
     },
-    [supabase, router]
+    [editTask]
   );
 
   return (

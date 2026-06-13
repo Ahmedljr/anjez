@@ -3,15 +3,11 @@
 import {
   createContext,
   useContext,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { createTask } from "@/services/task.service";
+import { useTasksStore } from "./TasksProvider";
 import { TaskFormModal } from "./TaskFormModal";
-import type { TaskInput } from "@/types/task";
 
 interface QuickAddContextValue {
   open: () => void;
@@ -28,29 +24,14 @@ export function useQuickAdd(): QuickAddContextValue {
   return ctx;
 }
 
-interface TaskQuickAddProviderProps {
-  userId: string;
-  children: ReactNode;
-}
-
 /**
  * Owns a single shared instance of the task creation modal so the floating
- * action button (and any future caller) can open it without duplicating the
- * form. Creation goes through the existing task service; a router refresh keeps
- * server components in sync afterwards.
+ * action button (and any future caller) can open it. Creation goes through the
+ * shared tasks store (optimistic, no server round-trip on navigation).
  */
-export function TaskQuickAddProvider({
-  userId,
-  children,
-}: TaskQuickAddProviderProps) {
-  const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
+export function TaskQuickAddProvider({ children }: { children: ReactNode }) {
+  const { addTask } = useTasksStore();
   const [open, setOpen] = useState(false);
-
-  async function handleCreate(input: TaskInput) {
-    await createTask(supabase, userId, input);
-    router.refresh();
-  }
 
   return (
     <QuickAddContext.Provider value={{ open: () => setOpen(true) }}>
@@ -58,7 +39,7 @@ export function TaskQuickAddProvider({
       <TaskFormModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={handleCreate}
+        onCreate={addTask}
       />
     </QuickAddContext.Provider>
   );

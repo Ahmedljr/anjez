@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ListChecks, CheckCircle2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui";
-import { useTasks } from "@/features/tasks/hooks/useTasks";
+import { useTasksStore } from "@/features/tasks/components/TasksProvider";
 import { useTaskInteraction } from "@/features/tasks/components/TaskInteractionProvider";
 import {
   activeTasks,
@@ -13,25 +13,15 @@ import {
 } from "@/features/tasks/lib/priority";
 import { QuickAddTask } from "./QuickAddTask";
 import { TaskItem } from "./TaskItem";
-import type { Task } from "@/types/task";
 
 export type TaskListFilter = "active" | "completed" | "overdue";
 
 interface TaskListProps {
-  userId: string;
-  initialTasks: Task[];
   filter?: TaskListFilter;
 }
 
-export function TaskList({
-  userId,
-  initialTasks,
-  filter = "active",
-}: TaskListProps) {
-  const { tasks, error, addTask, setStatus, togglePin } = useTasks({
-    userId,
-    initialTasks,
-  });
+export function TaskList({ filter = "active" }: TaskListProps) {
+  const { tasks, error, addTask, setStatus, togglePin } = useTasksStore();
   const { openDetails } = useTaskInteraction();
 
   const active = activeTasks(tasks);

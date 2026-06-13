@@ -87,8 +87,8 @@ anjez-app/
    `services/task.service.ts` / `services/auth.service.ts`, passing a client from
    `lib/supabase/{client,server}.ts`. No `.from(...)` calls in components.
 2. **Business logic lives outside components.** Sorting / filtering rules are in
-   `features/tasks/lib/priority.ts`; state orchestration is in
-   `features/tasks/hooks/useTasks.ts`; components render.
+   `features/tasks/lib/priority.ts`; task state + mutations live in the shared
+   `TasksProvider` store; components render.
 3. **Pages are thin.** Each `page.tsx` fetches the user/data via the server
    client and renders feature components.
 4. **Mobile-first & RTL.** Root `<html lang="ar" dir="rtl">`; the `lg:`
@@ -101,28 +101,45 @@ anjez-app/
 - Desktop **right** sidebar (RTL) with active-route highlighting; mobile
   hamburger → slide-out drawer + overlay.
 - A persistent **Floating Action Button** ("مهمة جديدة").
-- Two React context providers used app-wide:
-  - **`TaskQuickAddProvider`** — owns the single "new task" modal opened by the FAB.
-  - **`TaskInteractionProvider`** — owns the task **details** modal + edit modal,
-    so *any* task (dashboard card or list row) opens the same experience.
-    Mutations run through the service then `router.refresh()`.
+- React context providers used app-wide (in `AppShell`):
+  - **`TasksProvider`** — the **shared client task store** (see below). Seeded
+    once from the server in the dashboard layout; the single source of truth for
+    task data and all mutations.
+  - **`TaskQuickAddProvider`** — owns the single "new task" modal (FAB);
+    creates via the store.
+  - **`TaskInteractionProvider`** — owns the task **details** + edit modals, so
+    *any* task (dashboard card or list row) opens the same experience; edits /
+    deletes / status changes go through the store.
 
-### Navigation performance
+### Client-first data architecture (navigation performance)
 
-- **Single auth validation per navigation.** `middleware.ts` validates the
-  session with `auth.getUser()` once, then forwards the validated identity to
-  Server Components via request headers (`x-user-id` / `x-user-email` /
-  `x-user-name`, stripped from inbound requests so they can't be spoofed).
-  **`lib/supabase/current-user.ts`** `getCurrentUser()` reads those headers
-  instead of making a second `getUser()` network round-trip.
-- Data pages run auth + `fetchTasks` (+ search params) **concurrently** via
-  `Promise.all`.
-- **Route `loading.tsx` skeletons** (`/dashboard`, `/tasks`) render instantly on
-  navigation while the server payload streams, using the `Skeleton` UI
-  primitive — so transitions feel immediate.
+The dashboard and tasks routes are **client-first**: task data is fetched once
+and shared via an in-memory client store, so navigating between them does **not**
+re-fetch from the server.
+
+- **`TasksProvider`** (`features/tasks/components/TasksProvider.tsx`) holds the
+  user's tasks in React state, **seeded once** by the persistent dashboard
+  `layout.tsx` (which `fetchTasks` a single time — the layout does not re-run on
+  navigation between its children). `useTasksStore()` exposes the tasks +
+  optimistic mutations (`addTask` / `editTask` / `removeTask` / `setStatus` /
+  `togglePin` / `refresh`).
+- **Pages read the store, not the server.** `DashboardView` and `TaskList` are
+  client components that derive everything from the store (priorities, overdue,
+  summary, filters). The page server components are thin and fetch **no** task
+  data. Mutations update the store optimistically — **no `router.refresh()`** —
+  so changes reflect across dashboard and tasks instantly.
+- **`experimental.staleTimes`** (`next.config.ts`) keeps visited route shells in
+  the client Router Cache, so revisiting dashboard ↔ tasks is served from cache
+  (**~12–39 ms, no skeleton**) instead of a server round-trip.
+- **Auth preserved:** `middleware.ts` still validates the session with
+  `auth.getUser()` on every request and forwards the identity via headers
+  (`x-user-id` / `x-user-email` / `x-user-name`, stripped from inbound requests
+  so they can't be spoofed); `getCurrentUser()` reads them. RLS still scopes all
+  store reads/writes to the user.
+- **Route `loading.tsx` skeletons** + the `Skeleton` primitive cover the first
+  visit to a route (before its shell is cached).
 - **Client date formatting uses `Intl`** via `lib/format-date.ts`, not the
-  `date-fns` Arabic locale — keeping that locale payload out of the client
-  bundle (~8 kB lighter per authenticated route).
+  `date-fns` Arabic locale — keeping that payload out of the client bundle.
 
 ---
 
@@ -168,7 +185,8 @@ SQL lives in `supabase/schema.sql` (fresh installs) and `supabase/migrations/`:
   the `(dashboard)` layout (redirect to `/login` when signed out).
 
 ### Tasks
-- **Full CRUD** through `task.service.ts`; optimistic state in `useTasks`.
+- **Full CRUD** through `task.service.ts`; optimistic state in the shared
+  `TasksProvider` client store (single source of truth across dashboard + tasks).
 - **Fields:** title, description, impact level, start date, due date, status,
   recurrence, pin. Form validation (due date ≥ start date).
 - **3-state status workflow** via `StatusSelector` (○ لم تبدأ · ◐ قيد التنفيذ ·
