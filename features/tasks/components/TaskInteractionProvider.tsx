@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -35,18 +36,29 @@ export function useTaskInteraction(): TaskInteractionContextValue {
  * cards, task list rows) opens the same details modal. Mutations go through the
  * shared tasks store — optimistic, and reflected everywhere without a server
  * round-trip.
+ *
+ * The selected task is stored as an ID and derived from the live store so the
+ * modal always reflects the committed store state — avoiding a stale-snapshot
+ * race where the task object captured at click-time predates the relational-map
+ * commit (subtasks/checklist empty-array registration) from addTask.
  */
 export function TaskInteractionProvider({ children }: { children: ReactNode }) {
-  const { editTask, removeTask, setStatus } = useTasksStore();
-  const [detailsTask, setDetailsTask] = useState<Task | null>(null);
+  const { tasks, editTask, removeTask, setStatus } = useTasksStore();
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const openDetails = useCallback((task: Task) => setDetailsTask(task), []);
+  // Derive the current task from the live store so the modal is always in sync
+  // with committed state (status changes, edits) without manual snapshot updates.
+  const detailsTask = useMemo(
+    () => (selectedTaskId ? (tasks.find((t) => t.id === selectedTaskId) ?? null) : null),
+    [selectedTaskId, tasks]
+  );
+
+  const openDetails = useCallback((task: Task) => setSelectedTaskId(task.id), []);
 
   const handleChangeStatus = useCallback(
     (taskId: string, status: TaskStatus) => {
-      // Keep the open modal in sync with the optimistic change.
-      setDetailsTask((t) => (t && t.id === taskId ? { ...t, status } : t));
+      // Store update propagates to detailsTask automatically via the live derivation.
       void setStatus(taskId, status);
     },
     [setStatus]
@@ -55,14 +67,14 @@ export function TaskInteractionProvider({ children }: { children: ReactNode }) {
   const handleDelete = useCallback(
     (taskId: string) => {
       if (!window.confirm("هل تريد حذف هذه المهمة؟")) return;
-      setDetailsTask(null);
+      setSelectedTaskId(null);
       void removeTask(taskId);
     },
     [removeTask]
   );
 
   const handleEdit = useCallback((task: Task) => {
-    setDetailsTask(null);
+    setSelectedTaskId(null);
     setEditingTask(task);
   }, []);
 
@@ -79,7 +91,7 @@ export function TaskInteractionProvider({ children }: { children: ReactNode }) {
 
       <TaskDetailsModal
         task={detailsTask}
-        onClose={() => setDetailsTask(null)}
+        onClose={() => setSelectedTaskId(null)}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onChangeStatus={handleChangeStatus}

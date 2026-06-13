@@ -4,22 +4,22 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-10 · After Sprint 2.8B (Checklist + status-driven Subtasks)
+> Last handoff: 2026-06-14 · After bug-fix: stale-snapshot race in TaskInteractionProvider
 
 ---
 
 ## 1. Where things stand
 
-- **Code:** Sprints 1 → 2.6 implemented. `npm run build` and `npm run lint` both
-  pass cleanly from `anjez-app/`.
+- **Code:** Sprints 1 → 2.8B + two bug-fix commits fully implemented. `npm run build`
+  and `npm run lint` both pass cleanly from `anjez-app/`.
 - **Architecture note (2.6):** dashboard + tasks are now **client-first** — task
   data lives in a shared `TasksProvider` store seeded once by the dashboard
   layout; navigation between the two does not re-fetch. See §3c.
 - **Local run:** `npm run dev` (the project has been run on port 3001 locally
   because another app occupied 3000).
 - **Live data layer:** Supabase connected (URL + anon key in `.env.local`).
-  **Migrations `0002` + `0003` are applied** — verified live: task creation,
-  recurrence badges and the completion archive all work.
+  **Migrations `0002`–`0005` must be applied** — `0005_checklist_and_subtask_status.sql`
+  adds `checklist_items` and upgrades subtask status. See §2 below.
 
 ## 2. ⚠️ Required action: run migration `0005_checklist_and_subtask_status.sql`
 
@@ -66,7 +66,7 @@ Two **distinct** child primitives per task (one level each, never nested):
 - **Trade-off:** both primitives share the tasks store, so a change re-renders
   store consumers (task list). Negligible at current scale; splittable later.
 
-### Store-shape fix — new tasks register empty child arrays
+### Store-shape fix — new tasks register empty child arrays (Sprint 2.8B, commit c2a6a31)
 Optimistically-created tasks were never given a key in the `subtasks` /
 `checklist` maps (only tasks that *have* children get one from `groupByTask`),
 so a fresh task's store shape differed from a hydrated one. The UI already
@@ -75,6 +75,29 @@ sets `subtasks[id] = []` and `checklist[id] = []` on create — making new tasks
 identical to hydrated tasks and removing reliance on undefined-array guards.
 **Invariant for future per-task relational state:** initialize it in the
 optimistic create path **and** read it through a `?? []`/selector.
+
+### Stale-snapshot race fix — TaskInteractionProvider (2026-06-14)
+The previous fix above was necessary but not sufficient. `TaskInteractionProvider`
+stored `detailsTask` as a **Task snapshot** (`useState<Task | null>`). When a
+newly-created task was clicked immediately after creation, the snapshot was
+captured in the same React render batch as the `addTask` state commits. React's
+batching meant `tasks`, `subtasks`, and `checklist` all committed together —
+but the snapshot was taken from the calling component's stale closure over the
+task object, which predated the relational-map registrations being visible to the
+modal's render pass. This created an intermittent race: the sections (`ChecklistSection`,
+`SubtasksSection`) looked up `checklist[task.id]` / `subtasks[task.id]` from the
+live store but the `task.id` in the modal came from the stale snapshot, producing
+inconsistent results depending on render ordering.
+
+**Fix (`TaskInteractionProvider.tsx`):** replaced the task snapshot with a task ID
+(`useState<string | null>` → `selectedTaskId`) and derived `detailsTask` via
+`useMemo(() => tasks.find(t => t.id === selectedTaskId) ?? null, [selectedTaskId, tasks])`.
+The modal now always reads the **committed** task from the store. Side effects:
+- Manual status sync (`setDetailsTask((t) => ...)` in `handleChangeStatus`) is
+  removed — the store update propagates to `detailsTask` automatically.
+- The modal also auto-closes if the selected task is deleted from the store
+  (previously it held a stale snapshot of a deleted task).
+Build and lint verified clean.
 
 ## 2b. Subtasks architecture (Sprint 2.8)
 
