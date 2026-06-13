@@ -17,15 +17,15 @@ export function TaskProgressSummary({ taskId }: { taskId: string }) {
     subtasks[taskId] ?? []
   );
 
-  if (total === 0) return null;
-
   return (
     <div className="mt-4 rounded-xl bg-slate-50 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-sm font-medium text-slate-700">التقدّم</span>
-        <span className="text-sm font-medium text-slate-500">
-          {completed} / {total} · {percent}%
-        </span>
+        {total > 0 && (
+          <span className="text-sm font-medium text-slate-500">
+            {completed} / {total} · {percent}%
+          </span>
+        )}
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
         <div

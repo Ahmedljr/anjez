@@ -4,7 +4,7 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-14 · After bug-fix: stale-snapshot race in TaskInteractionProvider
+> Last handoff: 2026-06-14 · After bug-fix: TaskProgressSummary early-return removed; sections always render
 
 ---
 
@@ -75,6 +75,20 @@ sets `subtasks[id] = []` and `checklist[id] = []` on create — making new tasks
 identical to hydrated tasks and removing reliance on undefined-array guards.
 **Invariant for future per-task relational state:** initialize it in the
 optimistic create path **and** read it through a `?? []`/selector.
+
+### Progress section always renders — TaskProgressSummary (2026-06-14)
+`TaskProgressSummary` had `if (total === 0) return null;` on line 20.
+`combinedProgress([], [])` always returns `total = 0` for newly-created tasks
+(no checklist items, no subtasks), so the Progress section **never mounted** for
+them. The section header and bar are now always rendered; the numeric counter
+(`{completed} / {total} · {percent}%`) is wrapped in `{total > 0 && ...}` so it
+only appears once there is something to count — avoiding "0 / 0 · 0%" on new
+tasks. `ChecklistSection` and `SubtasksSection` already had no early returns and
+were unaffected. Build and lint verified clean.
+
+**Invariant for future roll-up widgets:** never return null from a summary
+component based on child count — render a neutral/empty shell instead. The
+parent task modal layout owns the decision of whether to show the section at all.
 
 ### Stale-snapshot race fix — TaskInteractionProvider (2026-06-14)
 The previous fix above was necessary but not sufficient. `TaskInteractionProvider`
