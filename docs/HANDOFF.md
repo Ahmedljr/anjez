@@ -113,8 +113,25 @@ total 9→10 with no refetch.
   185→188 kB) — acceptable for an authenticated app.
 - The store is seeded at layout load; it does not yet auto-revalidate on window
   focus/visibility (a `refresh()` exists for that — a small future add).
-- A throwaway test task ("مهمة اختبار المخزن المشترك") was created during
-  verification and persists in the DB; delete it if undesired.
+- Throwaway test tasks (e.g. "مهمة اختبار المخزن المشترك", "تجربة اخر تعديل")
+  were created during verification and persist in the DB; delete if undesired.
+
+## 3d. Tasks tab switching (micro-pass)
+
+**Bottleneck:** the Current/Completed tabs were `<Link>`s, so switching was a full
+route navigation (`?filter=…`) — a **~533 ms server round-trip** (middleware +
+tasks-page RSC) plus a `loading.tsx` skeleton flash — to filter data already in
+the client store.
+
+**Fix (`TaskList.tsx` + `tasks/page.tsx`):** the active filter is now client
+`useState`; tabs are `<button>`s that re-filter the store in place. `useMemo`
+caches the active/completed/overdue derivations. The URL stays in sync via
+`window.history.replaceState` (deep-links like `?filter=overdue` from the
+dashboard still set the initial filter). No UI/functionality change.
+
+**Measured:** tab switch **~533 ms + skeleton → ~31–82 ms, no skeleton, no
+navigation** (URL still synced). No `loading.tsx` flash; only `TaskList`
+re-renders.
 
 ## 4. Verification checklist (tasks feature)
 
