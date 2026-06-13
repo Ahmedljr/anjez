@@ -33,8 +33,8 @@ export function ChecklistSection({ taskId }: { taskId: string }) {
 
   return (
     <div className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <ListChecks className="h-4 w-4 text-slate-400" />
           قائمة التحقق
         </span>
@@ -46,6 +46,12 @@ export function ChecklistSection({ taskId }: { taskId: string }) {
       </div>
 
       <ul className="flex flex-col">
+        {items.length === 0 && (
+          <li className="flex flex-col items-center gap-2 py-4 text-center">
+            <Check className="h-6 w-6 text-slate-300 opacity-30" />
+            <span className="text-sm text-slate-400">لا توجد عناصر بعد — أضف أول عنصر أدناه</span>
+          </li>
+        )}
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-2.5 py-1">
             <button
@@ -87,7 +93,7 @@ export function ChecklistSection({ taskId }: { taskId: string }) {
       </ul>
 
       <form onSubmit={handleAdd} className="mt-1.5 flex items-center gap-2">
-        <Plus className="h-4 w-4 shrink-0 text-slate-300" />
+        <Plus className="h-4 w-4 shrink-0 text-slate-400" />
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

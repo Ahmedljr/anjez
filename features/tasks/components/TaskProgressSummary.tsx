@@ -20,27 +20,35 @@ export function TaskProgressSummary({ taskId }: { taskId: string }) {
   return (
     <div className="mt-4 rounded-xl bg-slate-50 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700">التقدّم</span>
+        <span className="text-sm font-semibold text-slate-700">التقدّم</span>
         {total > 0 && (
           <span className="text-sm font-medium text-slate-500">
             {completed} / {total} · {percent}%
           </span>
         )}
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-        <div
-          className={cn(
-            "h-full rounded-full transition-all",
-            allDone ? "bg-emerald-500" : "bg-primary-500"
+      {total === 0 ? (
+        <p className="text-sm text-slate-400">
+          أضف عناصر للقائمة أو المهام الفرعية لتتبع تقدمك
+        </p>
+      ) : (
+        <>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                allDone ? "bg-emerald-500" : "bg-primary-500"
+              )}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          {allDone && (
+            <div className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" />
+              كل العناصر مكتملة — المهمة جاهزة للإنجاز
+            </div>
           )}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      {allDone && (
-        <div className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />
-          كل العناصر مكتملة — المهمة جاهزة للإنجاز
-        </div>
+        </>
       )}
     </div>
   );

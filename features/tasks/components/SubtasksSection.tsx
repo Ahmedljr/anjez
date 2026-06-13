@@ -35,8 +35,8 @@ export function SubtasksSection({ taskId }: { taskId: string }) {
 
   return (
     <div className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <ListTree className="h-4 w-4 text-slate-400" />
           المهام الفرعية
         </span>
@@ -48,6 +48,12 @@ export function SubtasksSection({ taskId }: { taskId: string }) {
       </div>
 
       <ul className="flex flex-col gap-1">
+        {items.length === 0 && (
+          <li className="flex flex-col items-center gap-2 py-4 text-center">
+            <ListTree className="h-6 w-6 text-slate-300 opacity-30" />
+            <span className="text-sm text-slate-400">لا توجد مهام فرعية بعد — أضف أول مهمة أدناه</span>
+          </li>
+        )}
         {items.map((subtask) => (
           <li
             key={subtask.id}

@@ -4,7 +4,7 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-14 · After bug-fix: TaskProgressSummary early-return removed; sections always render
+> Last handoff: 2026-06-14 · UX polish pass — debug styles removed, empty states improved, section hierarchy strengthened
 
 ---
 
@@ -75,6 +75,28 @@ sets `subtasks[id] = []` and `checklist[id] = []` on create — making new tasks
 identical to hydrated tasks and removing reliance on undefined-array guards.
 **Invariant for future per-task relational state:** initialize it in the
 optimistic create path **and** read it through a `?? []`/selector.
+
+### UX polish pass — empty states + section hierarchy (2026-06-14)
+
+All temporary debug instrumentation has been removed. Sections are confirmed to
+mount correctly for both existing and newly-created tasks.
+
+**Changes applied (all UX-only — no logic, store, or architecture changes):**
+
+- **`TaskInteractionProvider.tsx`** — removed the fixed debug overlay
+  (`{selectedTaskId && (<div style=…>)}` block).
+- **`ChecklistSection.tsx`** — removed red debug border/background and DEBUG
+  `<p>` tag; header upgraded `font-medium → font-semibold` and `mb-2 → mb-3`;
+  empty state replaced plain text with a centered `Check` icon (opacity-30) +
+  descriptive label; `Plus` icon in add-row darkened `text-slate-300 → text-slate-400`.
+- **`SubtasksSection.tsx`** — same pattern: debug removed; header upgraded;
+  empty state gains a centered `ListTree` icon (opacity-30) + label.
+- **`TaskProgressSummary.tsx`** — debug removed; header upgraded `font-medium →
+  font-semibold`; when `total === 0` the empty progress bar is replaced with a
+  soft descriptive line ("أضف عناصر للقائمة أو المهام الفرعية لتتبع تقدمك");
+  when `total > 0` the bar, counter, and all-done hint render as before.
+
+`npm run lint` passes cleanly after these changes.
 
 ### Progress section always renders — TaskProgressSummary (2026-06-14)
 `TaskProgressSummary` had `if (total === 0) return null;` on line 20.
