@@ -11,11 +11,13 @@ import { FloatingActionButton } from "@/features/tasks/components/FloatingAction
 import { SidebarNav } from "./SidebarNav";
 import type { Task } from "@/types/task";
 import type { Subtask } from "@/types/subtask";
+import type { ChecklistItem } from "@/types/checklist";
 
 interface AppShellProps {
   userId: string;
   initialTasks: Task[];
   initialSubtasks: Subtask[];
+  initialChecklist: ChecklistItem[];
   children: ReactNode;
 }
 
@@ -23,6 +25,7 @@ export function AppShell({
   userId,
   initialTasks,
   initialSubtasks,
+  initialChecklist,
   children,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -32,6 +35,7 @@ export function AppShell({
       userId={userId}
       initialTasks={initialTasks}
       initialSubtasks={initialSubtasks}
+      initialChecklist={initialChecklist}
     >
       <TaskQuickAddProvider>
       <TaskInteractionProvider>

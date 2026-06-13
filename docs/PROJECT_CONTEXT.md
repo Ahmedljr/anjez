@@ -118,12 +118,13 @@ and shared via an in-memory client store, so navigating between them does **not*
 re-fetch from the server.
 
 - **`TasksProvider`** (`features/tasks/components/TasksProvider.tsx`) holds the
-  user's tasks **and subtasks** (grouped by `task_id`) in React state, **seeded
-  once** by the persistent dashboard `layout.tsx` (which `fetchTasks` +
-  `fetchSubtasks` a single time — the layout does not re-run on navigation
-  between its children). `useTasksStore()` exposes tasks + subtasks + optimistic
-  mutations (`addTask` / `editTask` / `removeTask` / `setStatus` / `togglePin` /
-  `addSubtask` / `toggleSubtask` / `removeSubtask` / `refresh`).
+  user's tasks, **subtasks and checklist items** (the latter two grouped by
+  `task_id`) in React state, **seeded once** by the persistent dashboard
+  `layout.tsx` (`fetchTasks` + `fetchSubtasks` + `fetchChecklistItems`, a single
+  time — the layout does not re-run on navigation). `useTasksStore()` exposes all
+  three + optimistic mutations (`addTask`/`editTask`/`removeTask`/`setStatus`/
+  `togglePin`; `addSubtask`/`setSubtaskStatus`/`removeSubtask`;
+  `addChecklistItem`/`toggleChecklistItem`/`removeChecklistItem`; `refresh`).
 - **Pages read the store, not the server.** `DashboardView` and `TaskList` are
   client components that derive everything from the store (priorities, overdue,
   summary, filters). The page server components are thin and fetch **no** task
@@ -167,31 +168,37 @@ Single table `public.tasks` (Row Level Security: each user sees only their rows)
 Triggers: `set_updated_at` (any update) and `set_completed_at` (stamps/clears
 `completed_at` as status enters/leaves `done`).
 
-### `public.subtasks` (Sprint 2.8 — one level only)
+### Two child primitives (Sprint 2.8B) — **distinct concepts**
 
-A task has many subtasks; subtasks are **never nested**. RLS scopes every row to
-`auth.uid() = user_id`; cascade-deleted with the parent task.
+A task supports **both** of these at once; they are not the same thing. One level
+only — neither is ever nested. Both are RLS-scoped and cascade-deleted with the
+parent task.
 
-| Column       | Type                        | Notes                        |
-| ------------ | --------------------------- | ---------------------------- |
-| `id`         | uuid (pk)                   | `gen_random_uuid()`          |
-| `task_id`    | uuid → `tasks` (cascade)    | parent task                  |
-| `user_id`    | uuid → `auth.users`         | cascade delete               |
-| `title`      | text (not blank)            |                              |
-| `is_done`    | boolean                     | completion                   |
-| `created_at` | timestamptz                 |                              |
-| `updated_at` | timestamptz                 | auto-stamped by trigger      |
+**`public.subtasks`** — real, status-driven mini-tasks (kept future-expandable):
+
+| Column    | Type                     | Notes                              |
+| --------- | ------------------------ | ---------------------------------- |
+| `id`      | uuid (pk)                |                                    |
+| `task_id` | uuid → `tasks` (cascade) | parent task                        |
+| `user_id` | uuid → `auth.users`      | cascade delete                     |
+| `title`   | text (not blank)         |                                    |
+| `status`  | enum `task_status`       | `todo` · `in_progress` · `done`    |
+| timestamps| timestamptz              | `updated_at` auto-stamped          |
+
+**`public.checklist_items`** — lightweight execution steps (checked/unchecked):
+same columns but `is_checked boolean` instead of `status` (no status system).
 
 SQL lives in `supabase/schema.sql` (fresh installs) and `supabase/migrations/`:
 
-- `0002_task_fields.sql` — adds `start_date`, `recurrence` + enum.
-- `0003_completed_at.sql` — adds `completed_at`, the stamping trigger, backfill.
-- `0004_subtasks.sql` — the `subtasks` table + index + RLS + trigger.
+- `0002` start_date/recurrence · `0003` completed_at.
+- `0004_subtasks.sql` — the `subtasks` table.
+- `0005_checklist_and_subtask_status.sql` — adds `checklist_items`; migrates
+  subtasks `is_done` → `status` enum.
 
-> ⚠️ **Migration status:** the live Supabase project must have migrations
-> `0002`–`0004` applied. The layout fetches subtasks defensively, so a
-> not-yet-migrated DB degrades gracefully (no subtasks) rather than crashing.
-> See [HANDOFF.md](HANDOFF.md).
+> ⚠️ **Migration status:** the live Supabase project must have `0002`–`0005`
+> applied. The layout fetches subtasks + checklist defensively, so a
+> not-yet-migrated DB degrades gracefully rather than crashing. See
+> [HANDOFF.md](HANDOFF.md).
 
 ---
 
@@ -214,11 +221,14 @@ SQL lives in `supabase/schema.sql` (fresh installs) and `supabase/migrations/`:
 - **Views (tabs + filter):** Active (`todo`+`in_progress`), Completed archive
   (done, newest first, with completion date), Overdue (`?filter=overdue`).
 - **Recurrence** stored as an enum; architecture ready for future custom rules.
-- **Subtasks (one level)** — add / complete / delete inside the task details
-  modal, with a completed count, percentage and progress bar; a compact
-  `{done}/{total}` badge on list rows. When all subtasks are done the task shows
-  a "ready to complete" hint but is **not** auto-completed. Subtasks live in the
-  same shared store (optimistic, instant, no refetch).
+- **Checklist + Subtasks (one level each, distinct concepts)** — the task
+  details modal is a workspace: **Notes → Checklist → Subtasks → Dates →
+  Progress**. *Checklist items* are lightweight checked/unchecked steps;
+  *subtasks* are status-driven mini-tasks (○ ◐ ✓ via the shared `StatusSelector`).
+  Parent **Progress** combines both (count + % + bar); an all-done state shows a
+  "ready to complete" hint but never auto-completes the parent. A combined
+  `{done}/{total}` badge appears on list rows. Both live in the shared store
+  (optimistic, instant, no refetch).
 
 ### Dashboard (command center)
 Sections, all interactive:

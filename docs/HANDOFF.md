@@ -4,7 +4,7 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-10 · After Sprint 2.8 (Subtasks MVP)
+> Last handoff: 2026-06-10 · After Sprint 2.8B (Checklist + status-driven Subtasks)
 
 ---
 
@@ -21,39 +21,50 @@
   **Migrations `0002` + `0003` are applied** — verified live: task creation,
   recurrence badges and the completion archive all work.
 
-## 2. ⚠️ Required action: run migration `0004_subtasks.sql`
+## 2. ⚠️ Required action: run migration `0005_checklist_and_subtask_status.sql`
 
-Subtasks (Sprint 2.8) need a new table. Run this **once** in the Supabase SQL
-Editor (also in `supabase/migrations/0004_subtasks.sql`; mirrored in
-`schema.sql`). The app degrades gracefully until then (no subtasks, no crash —
-the layout fetches subtasks with a `.catch`).
+Sprint 2.8B adds the `checklist_items` table and changes subtasks from a
+boolean `is_done` to a `status` enum. Run the full file
+`supabase/migrations/0005_checklist_and_subtask_status.sql` **once** in the
+Supabase SQL Editor (it is idempotent and requires `0004` to have run first).
+Until then the app degrades gracefully — checklist fetch `.catch`es to empty, and
+subtask `status` falls back to `todo` in the UI (no crash).
+
+Key statements (see the file for the full RLS + checklist DDL):
 
 ```sql
-create table if not exists public.subtasks (
-  id uuid primary key default gen_random_uuid(),
-  task_id uuid not null references public.tasks (id) on delete cascade,
-  user_id uuid not null references auth.users (id) on delete cascade,
-  title text not null check (char_length(trim(title)) > 0),
-  is_done boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists subtasks_task_id_idx on public.subtasks (task_id);
-create index if not exists subtasks_user_id_idx on public.subtasks (user_id);
-
-drop trigger if exists subtasks_set_updated_at on public.subtasks;
-create trigger subtasks_set_updated_at
-  before update on public.subtasks
-  for each row execute function public.set_updated_at();
-
-alter table public.subtasks enable row level security;
-create policy "Users can view their own subtasks"   on public.subtasks for select using (auth.uid() = user_id);
-create policy "Users can insert their own subtasks" on public.subtasks for insert with check (auth.uid() = user_id);
-create policy "Users can update their own subtasks" on public.subtasks for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "Users can delete their own subtasks" on public.subtasks for delete using (auth.uid() = user_id);
+-- subtasks: is_done boolean -> status enum (idempotent)
+alter table public.subtasks add column if not exists status task_status not null default 'todo';
+do $$ begin
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='subtasks' and column_name='is_done') then
+    update public.subtasks set status = 'done' where is_done = true;
+    alter table public.subtasks drop column is_done;
+  end if;
+end $$;
+-- + create table public.checklist_items (... is_checked boolean ...) with index/RLS/trigger
 ```
 
-Migrations `0002` + `0003` are already applied.
+Migrations `0002`–`0004` are already applied.
+
+## 2c. Checklist + Subtasks architecture (Sprint 2.8B)
+
+Two **distinct** child primitives per task (one level each, never nested):
+
+- **Checklist items** (`checklist_items`) — lightweight, `is_checked` only.
+  Store: `checklist` map; `addChecklistItem` / `toggleChecklistItem` /
+  `removeChecklistItem` (optimistic). UI: `ChecklistSection` (Notion-style rows).
+- **Subtasks** (`subtasks`) — real mini-tasks, `status` enum (reuses
+  `task_status`). Store: `setSubtaskStatus` replaces the old boolean toggle. UI:
+  `SubtasksSection` renders the shared `StatusSelector` (○ ◐ ✓). **Kept as its
+  own table specifically so it can gain estimates / dependencies / scheduling
+  without touching tasks or checklist.**
+- **Parent progress** (`TaskProgressSummary` + `combinedProgress`) rolls up
+  checklist + subtasks (count, %, bar, all-done hint) — parent **not**
+  auto-completed. The list-row badge shows the same combined `{done}/{total}`.
+- Modal layout = workspace: Notes → Checklist → Subtasks → Dates → Progress.
+- **Trade-off:** both primitives share the tasks store, so a change re-renders
+  store consumers (task list). Negligible at current scale; splittable later.
 
 ## 2b. Subtasks architecture (Sprint 2.8)
 

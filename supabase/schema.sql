@@ -86,12 +86,14 @@ create policy "Users can delete their own tasks"
   using (auth.uid() = user_id);
 
 -- Subtasks — one level only (a task has many subtasks; never nested).
+-- Real mini-tasks: status (todo/in_progress/done), reusing task_status. Kept as
+-- its own table so they stay future-expandable (estimates, dependencies, …).
 create table if not exists public.subtasks (
   id uuid primary key default gen_random_uuid(),
   task_id uuid not null references public.tasks (id) on delete cascade,
   user_id uuid not null references auth.users (id) on delete cascade,
   title text not null check (char_length(trim(title)) > 0),
-  is_done boolean not null default false,
+  status task_status not null default 'todo',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -126,4 +128,47 @@ create policy "Users can update their own subtasks"
 drop policy if exists "Users can delete their own subtasks" on public.subtasks;
 create policy "Users can delete their own subtasks"
   on public.subtasks for delete
+  using (auth.uid() = user_id);
+
+-- Checklist items — lightweight execution steps (checked / unchecked only).
+create table if not exists public.checklist_items (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null check (char_length(trim(title)) > 0),
+  is_checked boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists checklist_items_task_id_idx on public.checklist_items (task_id);
+create index if not exists checklist_items_user_id_idx on public.checklist_items (user_id);
+
+drop trigger if exists checklist_items_set_updated_at on public.checklist_items;
+create trigger checklist_items_set_updated_at
+  before update on public.checklist_items
+  for each row
+  execute function public.set_updated_at();
+
+alter table public.checklist_items enable row level security;
+
+drop policy if exists "Users can view their own checklist items" on public.checklist_items;
+create policy "Users can view their own checklist items"
+  on public.checklist_items for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert their own checklist items" on public.checklist_items;
+create policy "Users can insert their own checklist items"
+  on public.checklist_items for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their own checklist items" on public.checklist_items;
+create policy "Users can update their own checklist items"
+  on public.checklist_items for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their own checklist items" on public.checklist_items;
+create policy "Users can delete their own checklist items"
+  on public.checklist_items for delete
   using (auth.uid() = user_id);

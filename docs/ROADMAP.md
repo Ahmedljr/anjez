@@ -9,9 +9,11 @@
 
 ## Status at a glance
 
-- **Current phase:** Sprint 2.8 (Subtasks MVP) complete; build + lint green.
-- **Operational blocker:** migration **`0004_subtasks.sql`** must be applied to
-  the live DB (degrades gracefully until then). `0002` + `0003` already applied.
+- **Current phase:** Sprint 2.8B (Checklist + status-driven Subtasks) complete;
+  build + lint green.
+- **Operational blocker:** migration **`0005_checklist_and_subtask_status.sql`**
+  must be applied to the live DB (degrades gracefully until then). `0002`–`0004`
+  already applied.
 - **Next up:** Goals module — see "Future Roadmap".
 
 ---
@@ -127,6 +129,20 @@
   parent.
 - One level only (no nesting). Build + lint green; graceful pre-migration
   degradation verified.
+
+### Sprint 2.8B — Checklist + Status-Driven Subtasks ✅
+- Split the single boolean-subtask concept into **two distinct primitives**:
+  - **Checklist items** (`checklist_items` table) — lightweight checked/unchecked
+    steps; add/toggle/delete instantly.
+  - **Subtasks** — upgraded from `is_done` boolean to a **`status` enum**
+    (todo/in_progress/done, reusing `task_status`), so they read as real
+    mini-tasks and stay future-expandable (estimates, dependencies, scheduling).
+- **Task details = workspace:** Notes → Checklist → Subtasks → Dates → Progress.
+  Combined parent progress (checklist + subtasks) with count, %, bar, and an
+  all-done "ready to complete" hint (no auto-complete).
+- Both primitives integrated into the shared store (optimistic, instant, no
+  `router.refresh()` / navigation / refetch). Migration
+  `0005_checklist_and_subtask_status.sql` (+ `schema.sql`). Build + lint green.
 
 ---
 

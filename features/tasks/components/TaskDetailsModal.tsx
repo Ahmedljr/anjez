@@ -14,7 +14,9 @@ import {
 import { Badge, Button } from "@/components/ui";
 import { formatFullDate } from "@/lib/format-date";
 import { StatusSelector } from "./StatusSelector";
+import { ChecklistSection } from "./ChecklistSection";
 import { SubtasksSection } from "./SubtasksSection";
+import { TaskProgressSummary } from "./TaskProgressSummary";
 import {
   IMPACT_BADGE_TONE,
   IMPACT_LABELS,
@@ -92,13 +94,21 @@ export function TaskDetailsModal({
           />
         </div>
 
+        {/* Notes */}
         {task.description && (
           <p className="mb-4 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-700">
             {task.description}
           </p>
         )}
 
-        <div className="divide-y divide-slate-100 rounded-xl border border-slate-100 px-3">
+        {/* Checklist — lightweight execution steps */}
+        <ChecklistSection taskId={task.id} />
+
+        {/* Subtasks — real status-driven mini-tasks */}
+        <SubtasksSection taskId={task.id} />
+
+        {/* Dates */}
+        <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-100 px-3">
           <MetaRow
             icon={<Flag className="h-4 w-4" />}
             label="مستوى التأثير"
@@ -130,7 +140,8 @@ export function TaskDetailsModal({
           />
         </div>
 
-        <SubtasksSection taskId={task.id} />
+        {/* Progress — combined checklist + subtask roll-up */}
+        <TaskProgressSummary taskId={task.id} />
 
         <div className="mt-5 flex gap-3">
           <Button

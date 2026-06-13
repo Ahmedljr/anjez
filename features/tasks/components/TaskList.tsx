@@ -11,6 +11,7 @@ import {
   completedTasks,
   overdueTasks,
 } from "@/features/tasks/lib/priority";
+import { combinedProgress } from "@/features/tasks/lib/subtask-progress";
 import { QuickAddTask } from "./QuickAddTask";
 import { TaskItem } from "./TaskItem";
 
@@ -21,7 +22,7 @@ interface TaskListProps {
 }
 
 export function TaskList({ initialFilter = "active" }: TaskListProps) {
-  const { tasks, subtasks, error, addTask, setStatus, togglePin } =
+  const { tasks, subtasks, checklist, error, addTask, setStatus, togglePin } =
     useTasksStore();
   const { openDetails } = useTaskInteraction();
 
@@ -105,17 +106,17 @@ export function TaskList({ initialFilter = "active" }: TaskListProps) {
         ) : (
           <div className="flex flex-col gap-3">
             {visible.map((task) => {
-              const subs = subtasks[task.id];
+              const cp = combinedProgress(
+                checklist[task.id] ?? [],
+                subtasks[task.id] ?? []
+              );
               return (
                 <TaskItem
                   key={task.id}
                   task={task}
-                  subtaskSummary={
-                    subs && subs.length > 0
-                      ? {
-                          completed: subs.filter((s) => s.is_done).length,
-                          total: subs.length,
-                        }
+                  progressSummary={
+                    cp.total > 0
+                      ? { completed: cp.completed, total: cp.total }
                       : null
                   }
                   onChangeStatus={setStatus}

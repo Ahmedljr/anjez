@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/current-user";
 import { fetchTasks } from "@/services/task.service";
 import { fetchSubtasks } from "@/services/subtask.service";
+import { fetchChecklistItems } from "@/services/checklist.service";
 import { AppShell } from "@/components/layout/AppShell";
 
 export default async function DashboardLayout({
@@ -18,11 +19,13 @@ export default async function DashboardLayout({
   // navigation instead of being re-fetched on every route.
   // Subtasks are fetched defensively so a not-yet-migrated DB doesn't break the
   // rest of the app — it simply renders with no subtasks until 0004 is applied.
-  const [user, initialTasks, initialSubtasks] = await Promise.all([
-    getCurrentUser(),
-    fetchTasks(supabase),
-    fetchSubtasks(supabase).catch(() => []),
-  ]);
+  const [user, initialTasks, initialSubtasks, initialChecklist] =
+    await Promise.all([
+      getCurrentUser(),
+      fetchTasks(supabase),
+      fetchSubtasks(supabase).catch(() => []),
+      fetchChecklistItems(supabase).catch(() => []),
+    ]);
 
   if (!user) redirect("/login");
 
@@ -31,6 +34,7 @@ export default async function DashboardLayout({
       userId={user.id}
       initialTasks={initialTasks}
       initialSubtasks={initialSubtasks}
+      initialChecklist={initialChecklist}
     >
       {children}
     </AppShell>

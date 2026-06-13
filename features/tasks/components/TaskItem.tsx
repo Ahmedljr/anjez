@@ -15,8 +15,8 @@ import type { Task, TaskStatus } from "@/types/task";
 
 interface TaskItemProps {
   task: Task;
-  /** Compact subtask progress shown as a badge, when the task has subtasks. */
-  subtaskSummary?: { completed: number; total: number } | null;
+  /** Combined checklist + subtask progress, shown as a badge when present. */
+  progressSummary?: { completed: number; total: number } | null;
   onChangeStatus: (taskId: string, status: TaskStatus) => void;
   onTogglePin: (taskId: string, currentlyPinned: boolean) => void;
   onOpenDetails: (task: Task) => void;
@@ -24,14 +24,14 @@ interface TaskItemProps {
 
 export function TaskItem({
   task,
-  subtaskSummary,
+  progressSummary,
   onChangeStatus,
   onTogglePin,
   onOpenDetails,
 }: TaskItemProps) {
   const isDone = task.status === "done";
   const doneAt = isDone ? completionDate(task) : null;
-  const hasSubtasks = Boolean(subtaskSummary && subtaskSummary.total > 0);
+  const hasProgress = Boolean(progressSummary && progressSummary.total > 0);
 
   return (
     <Card
@@ -91,10 +91,10 @@ export function TaskItem({
               )}
             </>
           )}
-          {hasSubtasks && subtaskSummary && (
+          {hasProgress && progressSummary && (
             <Badge tone="slate">
               <ListTree className="h-3 w-3" />
-              {subtaskSummary.completed}/{subtaskSummary.total}
+              {progressSummary.completed}/{progressSummary.total}
             </Badge>
           )}
         </div>

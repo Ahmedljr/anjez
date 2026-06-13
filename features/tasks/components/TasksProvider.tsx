@@ -20,64 +20,88 @@ import {
   deleteSubtask,
   updateSubtask,
 } from "@/services/subtask.service";
-import type { Task, TaskInput, TaskUpdateInput } from "@/types/task";
+import {
+  createChecklistItem,
+  deleteChecklistItem,
+  updateChecklistItem,
+} from "@/services/checklist.service";
+import type { Task, TaskInput, TaskStatus, TaskUpdateInput } from "@/types/task";
 import type { Subtask } from "@/types/subtask";
+import type { ChecklistItem } from "@/types/checklist";
 
 type SubtasksByTask = Record<string, Subtask[]>;
+type ChecklistByTask = Record<string, ChecklistItem[]>;
 
 interface TasksContextValue {
   tasks: Task[];
-  /** The current user's subtasks, grouped by `task_id`. */
+  /** The current user's subtasks (real mini-tasks), grouped by `task_id`. */
   subtasks: SubtasksByTask;
+  /** The current user's checklist items (lightweight), grouped by `task_id`. */
+  checklist: ChecklistByTask;
   error: string | null;
   addTask: (input: TaskInput) => Promise<Task | null>;
   editTask: (taskId: string, input: TaskUpdateInput) => Promise<Task | null>;
   removeTask: (taskId: string) => Promise<void>;
-  setStatus: (taskId: string, status: Task["status"]) => Promise<Task | null>;
+  setStatus: (taskId: string, status: TaskStatus) => Promise<Task | null>;
   togglePin: (taskId: string, currentlyPinned: boolean) => Promise<Task | null>;
+  // Subtasks (status-driven)
   addSubtask: (taskId: string, title: string) => Promise<Subtask | null>;
-  toggleSubtask: (
+  setSubtaskStatus: (
     taskId: string,
     subtaskId: string,
-    isDone: boolean
+    status: TaskStatus
   ) => Promise<void>;
   removeSubtask: (taskId: string, subtaskId: string) => Promise<void>;
-  /** Re-fetch the canonical list from Supabase (background revalidation). */
+  // Checklist items (lightweight)
+  addChecklistItem: (taskId: string, title: string) => Promise<ChecklistItem | null>;
+  toggleChecklistItem: (
+    taskId: string,
+    itemId: string,
+    isChecked: boolean
+  ) => Promise<void>;
+  removeChecklistItem: (taskId: string, itemId: string) => Promise<void>;
+  /** Re-fetch the canonical task list from Supabase (background revalidation). */
   refresh: () => Promise<void>;
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
 
-function groupByTask(list: Subtask[]): SubtasksByTask {
-  const map: SubtasksByTask = {};
-  for (const s of list) (map[s.task_id] ??= []).push(s);
+function groupByTask<T extends { task_id: string }>(
+  list: T[]
+): Record<string, T[]> {
+  const map: Record<string, T[]> = {};
+  for (const item of list) (map[item.task_id] ??= []).push(item);
   return map;
 }
 
 /**
- * Shared client-side cache for the current user's tasks **and subtasks**.
- *
- * Both are seeded once from the server (in the persistent dashboard layout) and
- * kept in memory across navigation, so routes render instantly from the store
- * instead of re-fetching. Every mutation is optimistic and goes through the
- * services (RLS-protected), keeping all consumers in sync without a server
- * round-trip or `router.refresh()`.
+ * Shared client-side cache for the current user's tasks, **subtasks** and
+ * **checklist items**. All three are seeded once from the server (in the
+ * persistent dashboard layout) and kept in memory across navigation, so routes
+ * render instantly from the store. Every mutation is optimistic and goes
+ * through the services (RLS-protected) — no server round-trip or
+ * `router.refresh()`.
  */
 export function TasksProvider({
   userId,
   initialTasks,
   initialSubtasks,
+  initialChecklist,
   children,
 }: {
   userId: string;
   initialTasks: Task[];
   initialSubtasks: Subtask[];
+  initialChecklist: ChecklistItem[];
   children: ReactNode;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [subtasks, setSubtasks] = useState<SubtasksByTask>(() =>
     groupByTask(initialSubtasks)
+  );
+  const [checklist, setChecklist] = useState<ChecklistByTask>(() =>
+    groupByTask(initialChecklist)
   );
   const [error, setError] = useState<string | null>(null);
 
@@ -129,13 +153,15 @@ export function TasksProvider({
         previous = current;
         return current.filter((task) => task.id !== taskId);
       });
-      // Subtasks are cascade-deleted in the DB; drop them from the store too.
-      setSubtasks((current) => {
+      // Subtasks + checklist are cascade-deleted in the DB; drop them locally.
+      const drop = <T,>(current: Record<string, T>) => {
         if (!current[taskId]) return current;
         const next = { ...current };
         delete next[taskId];
         return next;
-      });
+      };
+      setSubtasks(drop);
+      setChecklist(drop);
       try {
         await deleteTask(supabase, taskId);
       } catch {
@@ -147,7 +173,7 @@ export function TasksProvider({
   );
 
   const setStatus = useCallback(
-    (taskId: string, status: Task["status"]) => editTask(taskId, { status }),
+    (taskId: string, status: TaskStatus) => editTask(taskId, { status }),
     [editTask]
   );
 
@@ -157,6 +183,7 @@ export function TasksProvider({
     [editTask]
   );
 
+  // --- Subtasks -----------------------------------------------------------
   const addSubtask = useCallback(
     async (taskId: string, title: string) => {
       setError(null);
@@ -167,7 +194,7 @@ export function TasksProvider({
         task_id: taskId,
         user_id: userId,
         title,
-        is_done: false,
+        status: "todo",
         created_at: now,
         updated_at: now,
       };
@@ -196,21 +223,27 @@ export function TasksProvider({
     [supabase, userId]
   );
 
-  const toggleSubtask = useCallback(
-    async (taskId: string, subtaskId: string, isDone: boolean) => {
+  const setSubtaskStatus = useCallback(
+    async (taskId: string, subtaskId: string, status: TaskStatus) => {
       setError(null);
-      const apply = (done: boolean) =>
+      let previousStatus: TaskStatus = "todo";
+      setSubtasks((current) => ({
+        ...current,
+        [taskId]: (current[taskId] ?? []).map((s) => {
+          if (s.id !== subtaskId) return s;
+          previousStatus = s.status;
+          return { ...s, status };
+        }),
+      }));
+      try {
+        await updateSubtask(supabase, subtaskId, { status });
+      } catch {
         setSubtasks((current) => ({
           ...current,
           [taskId]: (current[taskId] ?? []).map((s) =>
-            s.id === subtaskId ? { ...s, is_done: done } : s
+            s.id === subtaskId ? { ...s, status: previousStatus } : s
           ),
         }));
-      apply(isDone);
-      try {
-        await updateSubtask(supabase, subtaskId, { is_done: isDone });
-      } catch {
-        apply(!isDone);
         setError("تعذّر تحديث المهمة الفرعية");
       }
     },
@@ -235,6 +268,85 @@ export function TasksProvider({
     [supabase]
   );
 
+  // --- Checklist items ----------------------------------------------------
+  const addChecklistItem = useCallback(
+    async (taskId: string, title: string) => {
+      setError(null);
+      const now = new Date().toISOString();
+      const tempId = crypto.randomUUID();
+      const optimistic: ChecklistItem = {
+        id: tempId,
+        task_id: taskId,
+        user_id: userId,
+        title,
+        is_checked: false,
+        created_at: now,
+        updated_at: now,
+      };
+      setChecklist((current) => ({
+        ...current,
+        [taskId]: [...(current[taskId] ?? []), optimistic],
+      }));
+      try {
+        const real = await createChecklistItem(supabase, userId, taskId, title);
+        setChecklist((current) => ({
+          ...current,
+          [taskId]: (current[taskId] ?? []).map((i) =>
+            i.id === tempId ? real : i
+          ),
+        }));
+        return real;
+      } catch {
+        setChecklist((current) => ({
+          ...current,
+          [taskId]: (current[taskId] ?? []).filter((i) => i.id !== tempId),
+        }));
+        setError("تعذّر إضافة عنصر القائمة");
+        return null;
+      }
+    },
+    [supabase, userId]
+  );
+
+  const toggleChecklistItem = useCallback(
+    async (taskId: string, itemId: string, isChecked: boolean) => {
+      setError(null);
+      const apply = (checked: boolean) =>
+        setChecklist((current) => ({
+          ...current,
+          [taskId]: (current[taskId] ?? []).map((i) =>
+            i.id === itemId ? { ...i, is_checked: checked } : i
+          ),
+        }));
+      apply(isChecked);
+      try {
+        await updateChecklistItem(supabase, itemId, { is_checked: isChecked });
+      } catch {
+        apply(!isChecked);
+        setError("تعذّر تحديث عنصر القائمة");
+      }
+    },
+    [supabase]
+  );
+
+  const removeChecklistItem = useCallback(
+    async (taskId: string, itemId: string) => {
+      setError(null);
+      let previous: ChecklistItem[] = [];
+      setChecklist((current) => {
+        previous = current[taskId] ?? [];
+        return { ...current, [taskId]: previous.filter((i) => i.id !== itemId) };
+      });
+      try {
+        await deleteChecklistItem(supabase, itemId);
+      } catch {
+        setChecklist((current) => ({ ...current, [taskId]: previous }));
+        setError("تعذّر حذف عنصر القائمة");
+      }
+    },
+    [supabase]
+  );
+
   const refresh = useCallback(async () => {
     try {
       const fresh = await fetchTasks(supabase);
@@ -248,6 +360,7 @@ export function TasksProvider({
     () => ({
       tasks,
       subtasks,
+      checklist,
       error,
       addTask,
       editTask,
@@ -255,13 +368,17 @@ export function TasksProvider({
       setStatus,
       togglePin,
       addSubtask,
-      toggleSubtask,
+      setSubtaskStatus,
       removeSubtask,
+      addChecklistItem,
+      toggleChecklistItem,
+      removeChecklistItem,
       refresh,
     }),
     [
       tasks,
       subtasks,
+      checklist,
       error,
       addTask,
       editTask,
@@ -269,8 +386,11 @@ export function TasksProvider({
       setStatus,
       togglePin,
       addSubtask,
-      toggleSubtask,
+      setSubtaskStatus,
       removeSubtask,
+      addChecklistItem,
+      toggleChecklistItem,
+      removeChecklistItem,
       refresh,
     ]
   );

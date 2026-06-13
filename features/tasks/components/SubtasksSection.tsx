@@ -1,21 +1,24 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Plus, Trash2, Check, ListTree, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, ListTree } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui";
 import { useTasksStore } from "./TasksProvider";
+import { StatusSelector } from "./StatusSelector";
 import { subtaskProgress } from "@/features/tasks/lib/subtask-progress";
 
 /**
- * Subtasks for a single task, rendered inside the task details modal. Reads and
- * mutates the shared store directly — every change is optimistic and instant,
- * with no navigation or server refetch.
+ * Subtasks for a task — real mini-tasks with a status (todo / in_progress /
+ * done), not checkboxes. Reads and mutates the shared store optimistically; no
+ * navigation or refetch. Kept distinct from the lightweight checklist so it can
+ * grow into a richer entity later (estimates, dependencies, scheduling).
  */
 export function SubtasksSection({ taskId }: { taskId: string }) {
-  const { subtasks, addSubtask, toggleSubtask, removeSubtask } = useTasksStore();
+  const { subtasks, addSubtask, setSubtaskStatus, removeSubtask } =
+    useTasksStore();
   const items = subtasks[taskId] ?? [];
-  const { total, completed, percent, allDone } = subtaskProgress(items);
+  const { total, completed, percent } = subtaskProgress(items);
 
   const [title, setTitle] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -25,7 +28,7 @@ export function SubtasksSection({ taskId }: { taskId: string }) {
     const trimmed = title.trim();
     if (!trimmed) return;
     setSubmitting(true);
-    setTitle(""); // optimistic clear — the store adds it instantly
+    setTitle(""); // optimistic clear — store adds it instantly
     await addSubtask(taskId, trimmed);
     setSubmitting(false);
   }
@@ -44,51 +47,22 @@ export function SubtasksSection({ taskId }: { taskId: string }) {
         )}
       </div>
 
-      {total > 0 && (
-        <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all",
-              allDone ? "bg-emerald-500" : "bg-primary-500"
-            )}
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-      )}
-
-      {allDone && (
-        <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />
-          كل المهام الفرعية مكتملة — المهمة جاهزة للإنجاز
-        </div>
-      )}
-
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-1">
         {items.map((subtask) => (
           <li
             key={subtask.id}
-            className="group flex items-center gap-2.5 rounded-lg px-1 py-1"
+            className="flex items-center gap-2.5 rounded-lg px-1 py-1"
           >
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={subtask.is_done}
-              onClick={() =>
-                toggleSubtask(taskId, subtask.id, !subtask.is_done)
+            <StatusSelector
+              value={subtask.status ?? "todo"}
+              onChange={(status) =>
+                setSubtaskStatus(taskId, subtask.id, status)
               }
-              className={cn(
-                "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors",
-                subtask.is_done
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-slate-300 text-transparent hover:border-emerald-400"
-              )}
-            >
-              <Check className="h-3 w-3" />
-            </button>
+            />
             <span
               className={cn(
                 "flex-1 text-sm",
-                subtask.is_done
+                subtask.status === "done"
                   ? "text-slate-400 line-through"
                   : "text-slate-700"
               )}

@@ -61,7 +61,7 @@ export interface Database {
           task_id: string;
           user_id: string;
           title: string;
-          is_done: boolean;
+          status: TaskStatus;
           created_at: string;
           updated_at: string;
         };
@@ -70,7 +70,7 @@ export interface Database {
           task_id: string;
           user_id: string;
           title: string;
-          is_done?: boolean;
+          status?: TaskStatus;
           created_at?: string;
           updated_at?: string;
         };
@@ -79,7 +79,37 @@ export interface Database {
           task_id?: string;
           user_id?: string;
           title?: string;
-          is_done?: boolean;
+          status?: TaskStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      checklist_items: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          is_checked: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          is_checked?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          title?: string;
+          is_checked?: boolean;
           created_at?: string;
           updated_at?: string;
         };
