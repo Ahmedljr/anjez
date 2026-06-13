@@ -10,3 +10,4 @@ export * from "./components/TaskInteractionProvider";
 export * from "./components/FloatingActionButton";
 export * from "./lib/priority";
 export * from "./lib/labels";
+export * from "./lib/subtask-progress";

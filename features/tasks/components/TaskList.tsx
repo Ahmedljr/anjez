@@ -21,7 +21,8 @@ interface TaskListProps {
 }
 
 export function TaskList({ initialFilter = "active" }: TaskListProps) {
-  const { tasks, error, addTask, setStatus, togglePin } = useTasksStore();
+  const { tasks, subtasks, error, addTask, setStatus, togglePin } =
+    useTasksStore();
   const { openDetails } = useTaskInteraction();
 
   // The active filter is client state: switching tabs is a pure in-memory
@@ -103,15 +104,26 @@ export function TaskList({ initialFilter = "active" }: TaskListProps) {
           />
         ) : (
           <div className="flex flex-col gap-3">
-            {visible.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onChangeStatus={setStatus}
-                onTogglePin={togglePin}
-                onOpenDetails={openDetails}
-              />
-            ))}
+            {visible.map((task) => {
+              const subs = subtasks[task.id];
+              return (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  subtaskSummary={
+                    subs && subs.length > 0
+                      ? {
+                          completed: subs.filter((s) => s.is_done).length,
+                          total: subs.length,
+                        }
+                      : null
+                  }
+                  onChangeStatus={setStatus}
+                  onTogglePin={togglePin}
+                  onOpenDetails={openDetails}
+                />
+              );
+            })}
           </div>
         )}
       </div>

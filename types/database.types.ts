@@ -55,6 +55,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      subtasks: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          is_done: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          is_done?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          title?: string;
+          is_done?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

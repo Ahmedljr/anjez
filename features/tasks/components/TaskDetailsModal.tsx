@@ -14,6 +14,7 @@ import {
 import { Badge, Button } from "@/components/ui";
 import { formatFullDate } from "@/lib/format-date";
 import { StatusSelector } from "./StatusSelector";
+import { SubtasksSection } from "./SubtasksSection";
 import {
   IMPACT_BADGE_TONE,
   IMPACT_LABELS,
@@ -128,6 +129,8 @@ export function TaskDetailsModal({
             value={formatDate(task.created_at)}
           />
         </div>
+
+        <SubtasksSection taskId={task.id} />
 
         <div className="mt-5 flex gap-3">
           <Button

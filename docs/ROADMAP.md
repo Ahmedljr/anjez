@@ -9,10 +9,10 @@
 
 ## Status at a glance
 
-- **Current phase:** Sprint 2.6 (client-first data architecture) complete; build
-  + lint green.
-- **Operational blocker:** none — DB migrations `0002` + `0003` are applied.
-- **Next up:** **Subtasks MVP** (one level) — proposal below in "Future Roadmap".
+- **Current phase:** Sprint 2.8 (Subtasks MVP) complete; build + lint green.
+- **Operational blocker:** migration **`0004_subtasks.sql`** must be applied to
+  the live DB (degrades gracefully until then). `0002` + `0003` already applied.
+- **Next up:** Goals module — see "Future Roadmap".
 
 ---
 
@@ -105,12 +105,34 @@
   TanStack Query / SWR / Zustand: zero new deps, reuses the existing
   service + optimistic pattern, single resource. Build + lint green.
 
+### Sprint 2.7 — Tasks Tab Switching (micro-pass) ✅
+- Current/Completed tabs were `<Link>`s → each switch was a route navigation
+  (~533 ms server round-trip + skeleton flash) to filter in-store data.
+- Made the filter client `useState` (buttons, not Links); `useMemo` on the
+  derivations; URL synced via `history.replaceState` (deep-links preserved).
+- **Measured:** tab switch **~533 ms + skeleton → ~31–82 ms, no skeleton, no
+  navigation.** No UI/functionality change. See HANDOFF §3d.
+
+### Sprint 2.8 — Subtasks MVP ✅
+- **DB:** `public.subtasks` table (`id`, `task_id`→cascade, `user_id`, `title`,
+  `is_done`, timestamps) + index + RLS + `updated_at` trigger
+  (`migrations/0004_subtasks.sql`, mirrored in `schema.sql`).
+- **Store-integrated:** subtasks live in the shared `TasksProvider` (grouped by
+  `task_id`), seeded once by the layout; `addSubtask` / `toggleSubtask` /
+  `removeSubtask` are optimistic — instant, no `router.refresh()`, no navigation,
+  no refetch.
+- **UI:** add / complete / delete inside the task details modal, with completed
+  count, percentage and progress bar; compact `{done}/{total}` badge on list
+  rows; an all-done "ready to complete" hint that does **not** auto-complete the
+  parent.
+- One level only (no nesting). Build + lint green; graceful pre-migration
+  degradation verified.
+
 ---
 
 ## Current Sprint
 
-**Next: Subtasks MVP** — not yet started. See the proposal in "Future Roadmap →
-Subtasks MVP" below.
+**Next: Goals module** — not yet started.
 
 ---
 
@@ -118,25 +140,7 @@ Subtasks MVP" below.
 
 > Sequencing is indicative; each becomes its own sprint with a brief.
 
-### Immediate — Subtasks MVP (planned)
-
-One level only (parent task → child subtasks; **no nesting**). Checkbox
-completion, progress %, and completed count on the parent.
-
-- **DB:** new `public.subtasks` table — `id`, `task_id → tasks (cascade)`,
-  `user_id → auth.users (cascade)`, `title`, `is_done bool`, `position int`,
-  `created_at`, `updated_at`. RLS scoped to `auth.uid() = user_id`; index on
-  `(task_id)`. New migration `0004_subtasks.sql` + `schema.sql` update.
-- **Types:** `Subtask` / `SubtaskInput` in `types/subtask.ts`; add the table to
-  `database.types.ts`.
-- **Service:** `services/subtask.service.ts` — `fetchSubtasks(client, taskId)`,
-  `createSubtask`, `toggleSubtask`, `updateSubtask`, `deleteSubtask`.
-- **Logic:** `features/tasks/lib/subtask-progress.ts` — pure
-  `subtaskProgress(subtasks) → { total, completed, percent }`.
-- **UI:** `SubtaskList` + `SubtaskItem` (checkbox + title) and a progress bar,
-  rendered **inside `TaskDetailsModal`** under the description. A compact
-  "{completed}/{total}" badge on `TaskItem` when subtasks exist.
-- **Out of scope:** nested subtasks, drag reorder UI, auto-completing the parent.
+> Subtasks MVP shipped in **Sprint 2.8** (see Completed Sprints).
 
 ### Near term — first real modules
 1. **Goals module** — replace mock data with a real `goals` table; link tasks to

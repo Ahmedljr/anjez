@@ -4,7 +4,7 @@
 > pending, and exactly what the next person must do to continue. **Update after
 > every major implementation sprint.**
 >
-> Last handoff: 2026-06-10 · After Sprint 2.6 (Client-First Data Architecture)
+> Last handoff: 2026-06-10 · After Sprint 2.8 (Subtasks MVP)
 
 ---
 
@@ -21,11 +21,55 @@
   **Migrations `0002` + `0003` are applied** — verified live: task creation,
   recurrence badges and the completion archive all work.
 
-## 2. No outstanding blockers
+## 2. ⚠️ Required action: run migration `0004_subtasks.sql`
 
-The previously-required migrations are applied. Fresh environments should run
-`supabase/schema.sql` (which now includes all columns/triggers); existing
-environments are already migrated.
+Subtasks (Sprint 2.8) need a new table. Run this **once** in the Supabase SQL
+Editor (also in `supabase/migrations/0004_subtasks.sql`; mirrored in
+`schema.sql`). The app degrades gracefully until then (no subtasks, no crash —
+the layout fetches subtasks with a `.catch`).
+
+```sql
+create table if not exists public.subtasks (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.tasks (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  title text not null check (char_length(trim(title)) > 0),
+  is_done boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists subtasks_task_id_idx on public.subtasks (task_id);
+create index if not exists subtasks_user_id_idx on public.subtasks (user_id);
+
+drop trigger if exists subtasks_set_updated_at on public.subtasks;
+create trigger subtasks_set_updated_at
+  before update on public.subtasks
+  for each row execute function public.set_updated_at();
+
+alter table public.subtasks enable row level security;
+create policy "Users can view their own subtasks"   on public.subtasks for select using (auth.uid() = user_id);
+create policy "Users can insert their own subtasks" on public.subtasks for insert with check (auth.uid() = user_id);
+create policy "Users can update their own subtasks" on public.subtasks for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "Users can delete their own subtasks" on public.subtasks for delete using (auth.uid() = user_id);
+```
+
+Migrations `0002` + `0003` are already applied.
+
+## 2b. Subtasks architecture (Sprint 2.8)
+
+- **One level only** (a task has many subtasks; never nested).
+- **Store-integrated:** subtasks live in `TasksProvider` grouped by `task_id`,
+  seeded once by the layout (`fetchSubtasks`, defensive `.catch`). Mutations
+  `addSubtask` / `toggleSubtask` / `removeSubtask` are optimistic — instant, no
+  `router.refresh()`, no navigation, no refetch (matches the client-first model).
+- **UI:** `SubtasksSection` inside `TaskDetailsModal` (add / complete / delete +
+  count + percent + progress bar + all-done hint); `{done}/{total}` badge on
+  `TaskItem` (summary passed from `TaskList`, so list rows stay presentational).
+- **Parent logic:** an all-done state shows a "ready to complete" hint but does
+  **not** auto-complete the parent (deliberate).
+- **Trade-off:** subtasks share the tasks store, so a subtask change re-renders
+  store consumers (the task list). Negligible at current scale; could be split
+  into a separate context later if needed.
 
 ## 3. Performance notes (Sprints 2.4 + 2.5)
 

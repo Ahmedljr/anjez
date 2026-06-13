@@ -10,18 +10,29 @@ import { TaskInteractionProvider } from "@/features/tasks/components/TaskInterac
 import { FloatingActionButton } from "@/features/tasks/components/FloatingActionButton";
 import { SidebarNav } from "./SidebarNav";
 import type { Task } from "@/types/task";
+import type { Subtask } from "@/types/subtask";
 
 interface AppShellProps {
   userId: string;
   initialTasks: Task[];
+  initialSubtasks: Subtask[];
   children: ReactNode;
 }
 
-export function AppShell({ userId, initialTasks, children }: AppShellProps) {
+export function AppShell({
+  userId,
+  initialTasks,
+  initialSubtasks,
+  children,
+}: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <TasksProvider userId={userId} initialTasks={initialTasks}>
+    <TasksProvider
+      userId={userId}
+      initialTasks={initialTasks}
+      initialSubtasks={initialSubtasks}
+    >
       <TaskQuickAddProvider>
       <TaskInteractionProvider>
       <div className="min-h-dvh bg-slate-50">
